@@ -75,14 +75,19 @@
     // Horizontal strips (all frames in one row) OR a grid — set rows/cols.
     // Leave `frames` at 0 to auto-detect assuming SQUARE frames.
     ninja: {
-      drawH:   58,   // on-screen height in px. Does NOT change the hitbox.
+      drawH:   68,   // on-screen height in px. Does NOT change the hitbox.
       offsetX: 0,    // nudge the art if it does not sit centred
       offsetY: 0,
 
-      run:  { src: "assets/ninja_run.png",  frames: 0, rows: 1, fps: 12, loop: true  },
-      jump: { src: "assets/ninja_jump.png", frames: 0, rows: 1, fps: 14, loop: false },
-      fall: { src: "",                      frames: 0, rows: 1, fps: 10, loop: false },
+      // A single pose is just frames: 1. Give a slot a multi-frame strip and
+      // it animates instead (e.g. swap stand for a run cycle later).
+      stand: { src: "assets/ninja_stand.png", frames: 1, rows: 1, fps: 10, loop: true  },
+      jump:  { src: "assets/ninja_jump.png",  frames: 1, rows: 1, fps: 14, loop: false },
+      fall:  { src: "",                       frames: 0, rows: 1, fps: 10, loop: false },
     },
+
+    // One full ninja flip per jump, in frames at 60fps. Higher = slower spin.
+    spinFrames: 30,
   };
 
   // ==========================================================================
@@ -147,10 +152,15 @@
   };
 
   const SPR = {
-    run:  loadSprite(ASSETS.ninja.run),
-    jump: loadSprite(ASSETS.ninja.jump),
-    fall: loadSprite(ASSETS.ninja.fall),
+    stand: loadSprite(ASSETS.ninja.stand),
+    jump:  loadSprite(ASSETS.ninja.jump),
+    fall:  loadSprite(ASSETS.ninja.fall),
   };
+
+  // Art is taller than the hitbox, so ease off the tilt a little or the
+  // sprite's head and feet swing much further than the collision circle.
+  const usingSprites = () => SPR.stand.ok || SPR.jump.ok;
+  const TILT = () => (usingSprites() ? 0.75 : 1);
 
   // Never let a stalled file hold the game hostage.
   setTimeout(() => { loadedAll = true; }, 2500);
@@ -245,13 +255,14 @@
   const MAX_FALL      = 11;
   const SCROLL_SPEED  = 2.5;
   const GATE_SPACING  = 190;   // horizontal distance between gates
-  const GATE_GAP      = 158;   // vertical opening, shrinks slightly with score
-  const MIN_GAP       = 124;
+  const GATE_GAP      = 172;   // vertical opening, shrinks slightly with score
+  const MIN_GAP       = 136;
   const GROUND_H      = 76;
   const NINJA_X       = 120;
-  const NINJA_R       = 15;    // collision radius
+  const NINJA_R       = 17;    // collision radius (torso only - see README)
 
   const STATE = { READY: 0, PLAYING: 1, DEAD: 2 };
+  const DEAD_ROT = 1.9;   // head-down tumble the ninja settles into on death
 
   // ---------------------------------------------------------------- state
   let state, ninja, gates, particles, stars, clouds, score, best, frame;
@@ -262,9 +273,18 @@
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
 
+  // Where the ninja stands before take-off: feet planted on the ground.
+  // Clamped so a large drawH can never start the hitbox inside the ground.
+  function standY() {
+    const artH = usingSprites() ? ASSETS.ninja.drawH : NINJA_R * 2;
+    const feet = H - GROUND_H - artH / 2 - ASSETS.ninja.offsetY;
+    const safe = H - GROUND_H - NINJA_R - 2;
+    return Math.min(feet, safe);
+  }
+
   function reset() {
     state = STATE.READY;
-    ninja = { y: H / 2 - 40, vy: 0, rot: 0, trail: [], anim: "run", animT: 0 };
+    ninja = { y: standY(), vy: 0, rot: 0, trail: [], anim: "stand", animT: 0, spinT: 0 };
     gates = [];
     particles = [];
     score = 0;
@@ -272,7 +292,7 @@
     shake = 0;
     flash = 0;
     deadTimer = 0;
-    for (let i = 0; i < 4; i++) spawnGate(W + 120 + i * GATE_SPACING);
+    for (let i = 0; i < 4; i++) spawnGate(W + 220 + i * GATE_SPACING);
 
     stars = [];
     for (let i = 0; i < 40; i++) {
@@ -311,10 +331,12 @@
     if (state === STATE.READY) {
       state = STATE.PLAYING;
       ninja.vy = FLAP_VELOCITY;
-      puff(NINJA_X, ninja.y + 10, "#9fb4d8", 6);
+      ninja.spinT = ASSETS.spinFrames;
+      puff(NINJA_X, H - GROUND_H - 4, "#b9a48a", 10);   // dust off the ground
       playSfx("jump");
     } else if (state === STATE.PLAYING) {
       ninja.vy = FLAP_VELOCITY;
+      ninja.spinT = ASSETS.spinFrames;                  // restart the flip
       puff(NINJA_X - 6, ninja.y + 12, "#9fb4d8", 5);
       playSfx("jump");
     } else if (state === STATE.DEAD && deadTimer > 45) {
@@ -395,7 +417,7 @@
     if (flash > 0) flash -= .06;
     updateAnim();
 
-    const moving = state === STATE.PLAYING ? 1 : (state === STATE.READY ? .4 : 0);
+    const moving = state === STATE.PLAYING ? 1 : 0;
     bgOffset += SCROLL_SPEED * ASSETS.bgScroll * moving;
 
     for (const c of clouds) {
@@ -404,9 +426,10 @@
     }
 
     if (state === STATE.READY) {
-      ninja.y = H / 2 - 40 + Math.sin(frame / 22) * 9;
-      ninja.rot = Math.sin(frame / 22) * .12;
-      groundOffset += SCROLL_SPEED * .5;
+      // planted, not floating - the world only starts moving on take-off
+      ninja.y = standY();
+      ninja.rot = 0;
+      ninja.spinT = 0;
     }
 
     if (state === STATE.PLAYING) {
@@ -414,9 +437,20 @@
 
       ninja.vy = Math.min(ninja.vy + GRAVITY, MAX_FALL);
       ninja.y += ninja.vy;
-      // nose follows velocity: up-tilt on a flap, dive when falling
-      const target = Math.max(-0.5, Math.min(1.35, ninja.vy / 11));
-      ninja.rot += (target - ninja.rot) * .16;
+
+      if (ninja.spinT > 0) {
+        ninja.spinT--;
+        // On the last frame snap to 0 rather than 2pi. They are the same
+        // picture, but 2pi is a long way from the tilt target numerically,
+        // so leaving it there makes the lerp unwind the whole turn backwards.
+        ninja.rot = ninja.spinT > 0
+          ? Math.PI * 2 * (1 - ninja.spinT / ASSETS.spinFrames)
+          : 0;
+      } else {
+        // nose follows velocity: up-tilt on a flap, dive when falling
+        const target = Math.max(-0.5, Math.min(1.35, ninja.vy / 11)) * TILT();
+        ninja.rot += (target - ninja.rot) * .16;
+      }
 
       ninja.trail.push({ x: NINJA_X, y: ninja.y });
       if (ninja.trail.length > 9) ninja.trail.shift();
@@ -444,11 +478,13 @@
       if (ninja.y < H - GROUND_H - NINJA_R) {
         ninja.vy = Math.min(ninja.vy + GRAVITY, MAX_FALL);
         ninja.y += ninja.vy;
-        ninja.rot = Math.min(ninja.rot + .09, 1.6);
       } else {
         ninja.y = H - GROUND_H - NINJA_R;
         ninja.vy = 0;
       }
+      // keep tumbling head-down even after landing, so a ninja that dies at
+      // ground level still settles into the pose instead of freezing mid-flip
+      ninja.rot += (DEAD_ROT - ninja.rot) * .12;
     }
 
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -464,7 +500,7 @@
   // Which clip plays: running in place before take-off, the jump clip while
   // rising, and the fall clip (when supplied) on the way down.
   function pickAnim() {
-    if (state === STATE.READY) return "run";
+    if (state === STATE.READY) return "stand";
     if (state === STATE.DEAD)  return SPR.fall.ok ? "fall" : "jump";
     if (ninja.vy < 0)          return "jump";
     return SPR.fall.ok ? "fall" : "jump";
@@ -507,6 +543,10 @@
     deadTimer = 0;
     shake = 14;
     ninja.vy = -4;
+    ninja.spinT = 0;
+    // a flip can leave rot anywhere up to 2pi; fold it back to (-pi, pi] so
+    // the death tumble eases from where the sprite actually is
+    ninja.rot = ((ninja.rot + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     burst(NINJA_X, ninja.y);
     playSfx("hit");
   }
@@ -836,7 +876,7 @@
 
     ctx.save();
     ctx.translate(NINJA_X + ASSETS.ninja.offsetX, ninja.y + ASSETS.ninja.offsetY);
-    ctx.rotate(ninja.rot * 0.7);              // sprites read better under less tilt
+    ctx.rotate(ninja.rot);
     ctx.drawImage(spr.img, sx, sy, spr.fw, spr.fh, -w / 2, -h / 2, w, h);
     ctx.restore();
   }
@@ -874,7 +914,8 @@
       const bob = Math.sin(frame / 14) * 4;
       ctx.fillStyle = "rgba(255,255,255," + (.5 + Math.sin(frame / 14) * .35) + ")";
       ctx.font = "bold 22px 'Trebuchet MS', sans-serif";
-      ctx.fillText("\u25B2", NINJA_X, ninja.y - 36 + bob);
+      const headroom = (usingSprites() ? ASSETS.ninja.drawH : NINJA_R * 2) / 2 + 16;
+      ctx.fillText("\u25B2", NINJA_X, ninja.y - headroom + bob);
     }
 
     if (state === STATE.DEAD) {

@@ -8,12 +8,13 @@ background, music and ninja sprites** without touching the game logic.
 
 ## Adding your own art and music
 
-Put your files in `assets/` using these names and the game picks them up on reload:
+The ninja sprites are already in `assets/`. Add the rest by dropping files in
+with these names — the game picks them up on reload:
 
 ```
+assets/ninja_stand.png   standing pose (in the repo)
+assets/ninja_jump.png    jump pose (in the repo)
 assets/bg.png            background (tiled + scrolled)
-assets/ninja_run.png     run cycle, sprite strip - plays on the start screen
-assets/ninja_jump.png    jump, sprite strip - plays while rising
 assets/music.mp3         looping background music
 ```
 
@@ -48,11 +49,17 @@ python3 -m http.server 8000
 
 ## How it plays
 
+- The ninja **stands on the ground** until you start. Your first tap launches him
+  off it, so the run begins from ground level rather than mid-air.
+- Every jump throws a **full forward flip**, so he's spinning whenever he's climbing.
+  The flip takes 30 frames (half a second); change `spinFrames` in `ASSETS` to
+  spin faster or slower.
 - Gravity pulls you down constantly; each jump sets a fixed upward velocity.
 - You score a point for every bamboo gate you pass.
-- The gap narrows by 5px every 5 points, down to a floor of 124px, so it gets harder but stays clearable.
-- Hitting bamboo or the ground ends the run. Bumping the **ceiling** does not kill you — you just stop
-  rising, so the top of the screen is a safe wall rather than an invisible death line.
+- The gap narrows by 5px every 5 points, down to a floor of 136px, so it gets harder but stays clearable.
+- Hitting bamboo or the ground ends the run: the ninja stops spinning and tumbles head-down to the
+  ground, Flappy Bird style. Bumping the **ceiling** does not kill you — you just stop rising, so the
+  top of the screen is a safe wall rather than an invisible death line.
 - Your best score is kept in `localStorage`.
 
 ## Tuning
@@ -65,9 +72,11 @@ const FLAP_VELOCITY = -7.4;
 const MAX_FALL      = 11;
 const SCROLL_SPEED  = 2.5;
 const GATE_SPACING  = 190;   // horizontal distance between gates
-const GATE_GAP      = 158;   // starting vertical opening
-const MIN_GAP       = 124;   // hardest it ever gets
+const GATE_GAP      = 172;   // starting vertical opening
+const MIN_GAP       = 136;   // hardest it ever gets
 ```
+
+Sprite size (`drawH`) and spin speed (`spinFrames`) live in the `ASSETS` block just above it.
 
 ## Implementation notes
 
@@ -81,7 +90,12 @@ const MIN_GAP       = 124;   // hardest it ever gets
 - **Assets never break the game.** Loading is fire-and-forget: a missing or broken file leaves its
   `ok` flag false and the draw call takes its procedural branch. A 2.5s timeout stops a stalled file
   from holding the loading screen open.
-- **The hitbox is independent of the art** — a fixed 15px radius circle regardless of `drawH`, so
-  swapping sprites can't accidentally change the difficulty.
+- **The hitbox is independent of the art** — a fixed 17px radius circle regardless of `drawH`, so
+  swapping sprites can't accidentally change the difficulty. It covers the torso rather than the
+  whole sprite, which keeps a spinning humanoid forgiving instead of punishing.
+- **The flip lands on 0, not 2pi.** They draw identically, but leaving the angle at 2pi makes the
+  hand-off to the velocity tilt unwind the entire turn backwards. On death the angle is folded back
+  into (-pi, pi] for the same reason, and keeps easing after landing so the ninja can't freeze
+  mid-flip lying sideways on the ground.
 - **Music starts on the first tap**, because browsers block autoplay before a user gesture. Missing
   sound effects fall back to short WebAudio blips.
