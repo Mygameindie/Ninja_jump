@@ -2,8 +2,30 @@
 
 A Flappy Bird–style game: tap to flap, slip through the gaps in the bamboo, don't touch anything.
 
-Written as a single self-contained `index.html` — no build step, no dependencies, no image or audio
-assets. Everything is drawn with the Canvas 2D API.
+Written as a single self-contained `index.html` — no build step, no dependencies. It ships with
+placeholder graphics drawn with the Canvas 2D API, and is set up so you can **drop in your own
+background, music and ninja sprites** without touching the game logic.
+
+## Adding your own art and music
+
+Put your files in `assets/` using these names and the game picks them up on reload:
+
+```
+assets/bg.png            background (tiled + scrolled)
+assets/ninja_run.png     run cycle, sprite strip - plays on the start screen
+assets/ninja_jump.png    jump, sprite strip - plays while rising
+assets/music.mp3         looping background music
+```
+
+Sprite strips are one row of equal square frames; the frame count is auto-detected, so a 6-frame
+strip of 64px art is a 384x64 file. Non-square frames just need a `frames:` count.
+
+Everything is optional. **Any file that's missing falls back to the built-in drawing**, so the game
+runs fine with an empty `assets/` folder and keeps running as you add art one piece at a time.
+Optional extras — a fall animation, ground art, obstacle art and sound effects — are wired up too.
+
+Paths, sprite sizes, frame rates and volumes all live in the `ASSETS` block at the top of the
+`<script>` in `index.html`. **See [`assets/README.md`](assets/README.md) for the full spec.**
 
 ## Play
 
@@ -22,6 +44,7 @@ python3 -m http.server 8000
 | --- | --- |
 | Jump | `Space`, `↑`, `W`, `Enter`, click, or tap |
 | Start / retry | Same — any jump input |
+| Mute | `M`, or tap the speaker top-right (remembered) |
 
 ## How it plays
 
@@ -55,3 +78,10 @@ const MIN_GAP       = 124;   // hardest it ever gets
   forgiving at the corners than a box-vs-box test and feels fairer than it looks.
 - **Rendering** scales for `devicePixelRatio` (capped at 2) and the canvas is letterboxed to fit the
   viewport without distorting the 400×640 play field.
+- **Assets never break the game.** Loading is fire-and-forget: a missing or broken file leaves its
+  `ok` flag false and the draw call takes its procedural branch. A 2.5s timeout stops a stalled file
+  from holding the loading screen open.
+- **The hitbox is independent of the art** — a fixed 15px radius circle regardless of `drawH`, so
+  swapping sprites can't accidentally change the difficulty.
+- **Music starts on the first tap**, because browsers block autoplay before a user gesture. Missing
+  sound effects fall back to short WebAudio blips.

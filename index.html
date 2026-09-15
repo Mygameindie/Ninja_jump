@@ -39,6 +39,202 @@
 (() => {
   "use strict";
 
+  // ==========================================================================
+  //  YOUR ASSETS
+  //  Drop your files in assets/ and point these at them. Anything left as ""
+  //  — or any file that fails to load — falls back to the built-in drawing,
+  //  so the game always runs even with an empty assets/ folder.
+  //  See assets/README.md for sizes and formats.
+  // ==========================================================================
+  const ASSETS = {
+
+    // ---- background -------------------------------------------------------
+    // Tiled horizontally and scrolled. Any height works; it is scaled to fit.
+    background: "assets/bg.png",
+    bgScroll:   0.35,            // parallax speed, relative to the obstacles
+
+    // ---- ground strip (optional) -----------------------------------------
+    ground: "",                  // e.g. "assets/ground.png"
+
+    // ---- obstacles (optional) --------------------------------------------
+    // body is tiled along the column, cap is drawn at the gap end.
+    obstacleBody: "",            // e.g. "assets/bamboo.png"
+    obstacleCap:  "",            // e.g. "assets/bamboo_cap.png"
+
+    // ---- audio ------------------------------------------------------------
+    music:      "assets/music.mp3",
+    musicVol:   0.45,
+    sfxVol:     0.6,
+    sfx: {
+      jump:  "assets/sfx_jump.wav",
+      score: "assets/sfx_score.wav",
+      hit:   "assets/sfx_hit.wav",
+    },
+
+    // ---- ninja sprites ----------------------------------------------------
+    // Horizontal strips (all frames in one row) OR a grid — set rows/cols.
+    // Leave `frames` at 0 to auto-detect assuming SQUARE frames.
+    ninja: {
+      drawH:   58,   // on-screen height in px. Does NOT change the hitbox.
+      offsetX: 0,    // nudge the art if it does not sit centred
+      offsetY: 0,
+
+      run:  { src: "assets/ninja_run.png",  frames: 0, rows: 1, fps: 12, loop: true  },
+      jump: { src: "assets/ninja_jump.png", frames: 0, rows: 1, fps: 14, loop: false },
+      fall: { src: "",                      frames: 0, rows: 1, fps: 10, loop: false },
+    },
+  };
+
+  // ==========================================================================
+  //  Asset loading. Nothing here ever throws on a missing file — `ok` just
+  //  stays false and the drawing code takes its procedural branch.
+  // ==========================================================================
+  let pending = 0, loadedAll = false;
+
+  function loadImage(src) {
+    const slot = { img: null, ok: false };
+    if (!src) return slot;
+    pending++;
+    const img = new Image();
+    img.onload = () => {
+      slot.img = img;
+      slot.ok = img.naturalWidth > 0;
+      done();
+    };
+    img.onerror = done;
+    img.src = src;
+    return slot;
+  }
+
+  function loadSprite(spec) {
+    const slot = { ok: false, img: null, fw: 0, fh: 0, n: 1, fps: spec.fps || 12, loop: !!spec.loop };
+    if (!spec.src) return slot;
+    pending++;
+    const img = new Image();
+    img.onload = () => {
+      const rows = Math.max(1, spec.rows || 1);
+      let cols;
+      if (spec.frames > 0) {
+        cols = Math.ceil(spec.frames / rows);
+      } else if (rows === 1) {
+        // assume square frames: a 6-frame strip of 64px art is 384x64
+        cols = Math.max(1, Math.round(img.width / img.height));
+      } else {
+        cols = rows;
+      }
+      slot.img = img;
+      slot.fw = img.width / cols;
+      slot.fh = img.height / rows;
+      slot.n = spec.frames > 0 ? spec.frames : cols * rows;
+      slot.cols = cols;
+      slot.ok = true;
+      done();
+    };
+    img.onerror = done;
+    img.src = spec.src;
+    return slot;
+  }
+
+  function done() {
+    if (--pending <= 0) loadedAll = true;
+  }
+
+  const IMG = {
+    bg:   loadImage(ASSETS.background),
+    grd:  loadImage(ASSETS.ground),
+    body: loadImage(ASSETS.obstacleBody),
+    cap:  loadImage(ASSETS.obstacleCap),
+  };
+
+  const SPR = {
+    run:  loadSprite(ASSETS.ninja.run),
+    jump: loadSprite(ASSETS.ninja.jump),
+    fall: loadSprite(ASSETS.ninja.fall),
+  };
+
+  // Never let a stalled file hold the game hostage.
+  setTimeout(() => { loadedAll = true; }, 2500);
+
+  // ==========================================================================
+  //  Audio. Music needs a user gesture before it may start, so it kicks off
+  //  on the first flap. Missing sfx files fall back to short WebAudio blips.
+  // ==========================================================================
+  const SND = {
+    music: null,
+    muted: (load("ninjaJumpMuted") === "1"),
+    started: false,
+    sfx: {},
+  };
+
+  if (ASSETS.music) {
+    const m = new Audio();
+    m.src = ASSETS.music;
+    m.loop = true;
+    m.volume = ASSETS.musicVol;
+    m.preload = "auto";
+    m.addEventListener("error", () => { SND.music = null; });
+    SND.music = m;
+  }
+
+  for (const k in ASSETS.sfx) {
+    const src = ASSETS.sfx[k];
+    if (!src) continue;
+    const a = new Audio();
+    a.src = src;
+    a.preload = "auto";
+    a.volume = ASSETS.sfxVol;
+    a.addEventListener("error", () => { SND.sfx[k] = null; });
+    SND.sfx[k] = a;
+  }
+
+  let actx = null;
+  function blip(freq, dur, type) {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || "square";
+      o.frequency.setValueAtTime(freq, actx.currentTime);
+      g.gain.setValueAtTime(ASSETS.sfxVol * 0.18, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + dur);
+    } catch (e) { /* no audio available */ }
+  }
+
+  const FALLBACK_SFX = {
+    jump:  () => blip(520, 0.09, "square"),
+    score: () => blip(880, 0.12, "triangle"),
+    hit:   () => blip(150, 0.30, "sawtooth"),
+  };
+
+  function playSfx(name) {
+    if (SND.muted) return;
+    const a = SND.sfx[name];
+    if (a && a.readyState >= 2) {
+      try {
+        const c = a.cloneNode();       // clone so rapid flaps overlap
+        c.volume = ASSETS.sfxVol;
+        c.play().catch(() => {});
+        return;
+      } catch (e) { /* fall through to the blip */ }
+    }
+    if (FALLBACK_SFX[name]) FALLBACK_SFX[name]();
+  }
+
+  function startMusic() {
+    if (!SND.music || SND.started || SND.muted) return;
+    SND.music.play().then(() => { SND.started = true; }).catch(() => {});
+  }
+
+  function setMuted(v) {
+    SND.muted = v;
+    save("ninjaJumpMuted", v ? "1" : "0");
+    if (SND.music) {
+      if (v) { SND.music.pause(); }
+      else { SND.music.play().then(() => { SND.started = true; }).catch(() => {}); }
+    }
+  }
+
   const W = 400, H = 640;
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
@@ -59,7 +255,7 @@
 
   // ---------------------------------------------------------------- state
   let state, ninja, gates, particles, stars, clouds, score, best, frame;
-  let shake = 0, flash = 0, deadTimer = 0, groundOffset = 0;
+  let shake = 0, flash = 0, deadTimer = 0, groundOffset = 0, bgOffset = 0;
 
   best = Number(load("ninjaJumpBest") || 0);
 
@@ -68,7 +264,7 @@
 
   function reset() {
     state = STATE.READY;
-    ninja = { y: H / 2 - 40, vy: 0, rot: 0, trail: [] };
+    ninja = { y: H / 2 - 40, vy: 0, rot: 0, trail: [], anim: "run", animT: 0 };
     gates = [];
     particles = [];
     score = 0;
@@ -111,13 +307,16 @@
 
   // ---------------------------------------------------------------- input
   function flap() {
+    startMusic();
     if (state === STATE.READY) {
       state = STATE.PLAYING;
       ninja.vy = FLAP_VELOCITY;
       puff(NINJA_X, ninja.y + 10, "#9fb4d8", 6);
+      playSfx("jump");
     } else if (state === STATE.PLAYING) {
       ninja.vy = FLAP_VELOCITY;
       puff(NINJA_X - 6, ninja.y + 12, "#9fb4d8", 5);
+      playSfx("jump");
     } else if (state === STATE.DEAD && deadTimer > 45) {
       reset();
     }
@@ -127,12 +326,36 @@
     if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Enter") {
       e.preventDefault();
       flap();
+    } else if (e.code === "KeyM") {
+      setMuted(!SND.muted);
     }
   }
 
+  // speaker button, top-right
+  const MUTE_BTN = { x: W - 46, y: 12, w: 34, h: 34 };
+
+  function toCanvas(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (clientX - r.left) * (W / r.width), y: (clientY - r.top) * (H / r.height) };
+  }
+
+  function onPoint(clientX, clientY) {
+    const p = toCanvas(clientX, clientY);
+    if (p.x >= MUTE_BTN.x - 6 && p.x <= MUTE_BTN.x + MUTE_BTN.w + 6 &&
+        p.y >= MUTE_BTN.y - 6 && p.y <= MUTE_BTN.y + MUTE_BTN.h + 6) {
+      setMuted(!SND.muted);
+      return;                       // tapping the speaker must not also flap
+    }
+    flap();
+  }
+
   window.addEventListener("keydown", onKey, { passive: false });
-  canvas.addEventListener("mousedown", e => { e.preventDefault(); flap(); });
-  canvas.addEventListener("touchstart", e => { e.preventDefault(); flap(); }, { passive: false });
+  canvas.addEventListener("mousedown", e => { e.preventDefault(); onPoint(e.clientX, e.clientY); });
+  canvas.addEventListener("touchstart", e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    onPoint(t.clientX, t.clientY);
+  }, { passive: false });
 
   // ---------------------------------------------------------------- effects
   function puff(x, y, color, n) {
@@ -170,6 +393,10 @@
     frame++;
     if (shake > 0) shake *= .88;
     if (flash > 0) flash -= .06;
+    updateAnim();
+
+    const moving = state === STATE.PLAYING ? 1 : (state === STATE.READY ? .4 : 0);
+    bgOffset += SCROLL_SPEED * ASSETS.bgScroll * moving;
 
     for (const c of clouds) {
       c.x -= c.v * (state === STATE.PLAYING ? 1 : .4);
@@ -179,11 +406,11 @@
     if (state === STATE.READY) {
       ninja.y = H / 2 - 40 + Math.sin(frame / 22) * 9;
       ninja.rot = Math.sin(frame / 22) * .12;
-      groundOffset = (groundOffset + SCROLL_SPEED * .5) % 40;
+      groundOffset += SCROLL_SPEED * .5;
     }
 
     if (state === STATE.PLAYING) {
-      groundOffset = (groundOffset + SCROLL_SPEED) % 40;
+      groundOffset += SCROLL_SPEED;
 
       ninja.vy = Math.min(ninja.vy + GRAVITY, MAX_FALL);
       ninja.y += ninja.vy;
@@ -200,6 +427,7 @@
           g.scored = true;
           score++;
           flash = .35;
+          playSfx("score");
           if (score > best) { best = score; save("ninjaJumpBest", best); }
         }
       }
@@ -233,6 +461,26 @@
     }
   }
 
+  // Which clip plays: running in place before take-off, the jump clip while
+  // rising, and the fall clip (when supplied) on the way down.
+  function pickAnim() {
+    if (state === STATE.READY) return "run";
+    if (state === STATE.DEAD)  return SPR.fall.ok ? "fall" : "jump";
+    if (ninja.vy < 0)          return "jump";
+    return SPR.fall.ok ? "fall" : "jump";
+  }
+
+  function updateAnim() {
+    const want = pickAnim();
+    if (want !== ninja.anim) { ninja.anim = want; ninja.animT = 0; }
+    else ninja.animT++;
+  }
+
+  function animFrame(spr) {
+    const i = Math.floor(ninja.animT * spr.fps / 60);
+    return spr.loop ? i % spr.n : Math.min(i, spr.n - 1);
+  }
+
   function hits() {
     if (ninja.y + NINJA_R >= H - GROUND_H) return true;
     if (ninja.y - NINJA_R <= 0) { ninja.y = NINJA_R; ninja.vy = 0; }  // bonk on the ceiling, not a loss
@@ -260,6 +508,7 @@
     shake = 14;
     ninja.vy = -4;
     burst(NINJA_X, ninja.y);
+    playSfx("hit");
   }
 
   // ---------------------------------------------------------------- draw
@@ -270,9 +519,11 @@
     }
 
     drawSky();
-    drawStars();
-    drawMountains();
-    drawClouds();
+    if (!IMG.bg.ok) {
+      drawStars();
+      drawMountains();
+      drawClouds();
+    }
     for (const g of gates) drawGate(g);
     drawGround();
     drawParticles();
@@ -286,9 +537,20 @@
     }
 
     drawUI();
+    drawSpeaker();
+    if (!loadedAll) drawLoading();
   }
 
   function drawSky() {
+    if (IMG.bg.ok) {
+      // scaled to cover the full height, tiled horizontally, wrapping
+      const img = IMG.bg.img;
+      const w = Math.max(1, img.width * (H / img.height));
+      let x = -(bgOffset % w);
+      while (x < W) { ctx.drawImage(img, x, 0, w, H); x += w; }
+      return;
+    }
+
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, "#1a1f38");
     g.addColorStop(.45, "#38335a");
@@ -367,6 +629,42 @@
 
   function drawBamboo(x, y, w, h, capOnTop) {
     if (h <= 0) return;
+
+    if (IMG.body.ok) {
+      const img = IMG.body.img;
+      const th = Math.max(1, img.height * (w / img.width));   // tile at natural aspect
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
+      // tile from the gap end outwards so the seam never lands on the cap
+      if (capOnTop) {
+        for (let ty = y; ty < y + h; ty += th) ctx.drawImage(img, x, ty, w, th);
+      } else {
+        for (let ty = y + h - th; ty > y - th; ty -= th) ctx.drawImage(img, x, ty, w, th);
+      }
+      ctx.restore();
+
+      if (IMG.cap.ok) {
+        const cimg = IMG.cap.img;
+        const cw = w + 8;
+        const ch = Math.max(1, cimg.height * (cw / cimg.width));
+        const cy = capOnTop ? y : y + h - ch;
+        ctx.save();
+        if (capOnTop) {
+          // ground column: cap sits at the top of it, drawn as authored
+          ctx.drawImage(cimg, x - 4, cy, cw, ch);
+        } else {
+          // ceiling column: cap hangs under it, so flip it vertically
+          ctx.translate(x - 4, cy + ch);
+          ctx.scale(1, -1);
+          ctx.drawImage(cimg, 0, 0, cw, ch);
+        }
+        ctx.restore();
+      }
+      return;
+    }
+
     const grad = ctx.createLinearGradient(x, 0, x + w, 0);
     grad.addColorStop(0, "#3f7d4a");
     grad.addColorStop(.32, "#6fbf74");
@@ -407,6 +705,15 @@
 
   function drawGround() {
     const y = H - GROUND_H;
+
+    if (IMG.grd.ok) {
+      const img = IMG.grd.img;
+      const w = Math.max(1, img.width * (GROUND_H / img.height));
+      let x = -(groundOffset % w);
+      while (x < W) { ctx.drawImage(img, x, y, w, GROUND_H); x += w; }
+      return;
+    }
+
     ctx.fillStyle = "#4a3b52";
     ctx.fillRect(0, y, W, GROUND_H);
 
@@ -415,7 +722,7 @@
 
     // scrolling roof-tile stripes
     ctx.fillStyle = "rgba(0,0,0,.16)";
-    for (let x = -groundOffset; x < W; x += 40) {
+    for (let x = -(groundOffset % 40); x < W; x += 40) {
       ctx.beginPath();
       ctx.moveTo(x, y + 10);
       ctx.lineTo(x + 20, y + 10);
@@ -440,7 +747,10 @@
   }
 
   function drawNinja() {
-    // motion trail
+    const spr = SPR[ninja.anim];
+    if (spr && spr.ok) { drawNinjaSprite(spr); return; }
+
+    // motion trail (procedural ninja only - a real sprite has its own motion)
     if (state === STATE.PLAYING) {
       for (let i = 0; i < ninja.trail.length; i++) {
         const t = ninja.trail[i];
@@ -516,6 +826,21 @@
     ctx.restore();
   }
 
+  function drawNinjaSprite(spr) {
+    const i  = animFrame(spr);
+    const sx = (i % (spr.cols || spr.n)) * spr.fw;
+    const sy = Math.floor(i / (spr.cols || spr.n)) * spr.fh;
+
+    const h = ASSETS.ninja.drawH;
+    const w = h * (spr.fw / spr.fh);
+
+    ctx.save();
+    ctx.translate(NINJA_X + ASSETS.ninja.offsetX, ninja.y + ASSETS.ninja.offsetY);
+    ctx.rotate(ninja.rot * 0.7);              // sprites read better under less tilt
+    ctx.drawImage(spr.img, sx, sy, spr.fw, spr.fh, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
   function drawUI() {
     ctx.textAlign = "center";
 
@@ -585,6 +910,55 @@
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  function drawSpeaker() {
+    const b = MUTE_BTN;
+    ctx.save();
+    ctx.globalAlpha = .75;
+    ctx.fillStyle = "rgba(16, 20, 34, .55)";
+    roundRect(b.x, b.y, b.w, b.h, 9);
+    ctx.fill();
+
+    const cx = b.x + 12, cy = b.y + b.h / 2;
+    ctx.fillStyle = "#e6ebf6";
+    ctx.beginPath();
+    ctx.moveTo(cx - 5, cy - 3);
+    ctx.lineTo(cx - 1, cy - 3);
+    ctx.lineTo(cx + 4, cy - 8);
+    ctx.lineTo(cx + 4, cy + 8);
+    ctx.lineTo(cx - 1, cy + 3);
+    ctx.lineTo(cx - 5, cy + 3);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#e6ebf6";
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = "round";
+    if (SND.muted) {
+      ctx.beginPath();
+      ctx.moveTo(cx + 9, cy - 5);
+      ctx.lineTo(cx + 17, cy + 5);
+      ctx.moveTo(cx + 17, cy - 5);
+      ctx.lineTo(cx + 9, cy + 5);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx + 5, cy, 6, -.9, .9);
+      ctx.moveTo(cx + 13.5, cy - 6.5);
+      ctx.arc(cx + 5, cy, 10, -.8, .8);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawLoading() {
+    ctx.fillStyle = "rgba(8, 10, 18, .82)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#cfd6e6";
+    ctx.font = "16px 'Trebuchet MS', sans-serif";
+    ctx.fillText("loading" + ".".repeat(1 + (Math.floor(frame / 20) % 3)), W / 2, H / 2);
   }
 
   function panel(cx, y, w, h) {
