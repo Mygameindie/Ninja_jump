@@ -11,7 +11,7 @@ All paths and sizes live in the `ASSETS` block at the top of the `<script>` in
 
 | File | What it is | Notes |
 | --- | --- | --- |
-| `bg.png` | Background | Tiled horizontally and scrolled. Any size; scaled to the 640px canvas height. **Make the left and right edges match** so the loop is seamless. |
+| `bg.png` | Background | **Still needed.** Tiled horizontally and scrolled. Any size. Edges do not need to match — see below. |
 | `ninja_stand.png` | Standing pose | Shown on the start screen, planted on the ground. Already in the repo. |
 | `ninja_jump.png` | Jump pose | Used in the air and on death. Already in the repo. |
 | `ninja_fall.png` | Fall *(optional)* | If absent, the jump pose is reused. Enable by setting its `src` in `ASSETS`. |
@@ -22,6 +22,33 @@ All paths and sizes live in the `ASSETS` block at the top of the `<script>` in
 | `sfx_score.mp3` | Point scored *(optional)* | Not supplied — a synthesized blip stands in until you add one. |
 | `ground.png` | Ground strip *(optional)* | Tiled. 76px tall on screen. Set its `src` in `ASSETS` to enable. |
 | `pole.png` | Obstacle | In the repo. Tiled along each column from the gap end outwards. |
+
+## The background
+
+Drop any image in as `bg.png`. Two knobs in `ASSETS` control it:
+
+```js
+bgZoom:   1,      // 1 = fit the canvas height; raise it to zoom in
+bgMirror: true,   // flip alternate tiles so the loop has no seam
+```
+
+**`bgMirror` means a photo does not need to tile.** Normally a scrolling
+background must have matching left and right edges or the loop shows a hard
+vertical line sliding past every few seconds — and stock photos almost never
+tile. With mirroring on, every other copy is flipped, so each tile's edge always
+meets an identical copy of itself and the seam disappears. Measured on a
+deliberately non-tiling test image, the colour jump at the tile boundary drops
+from 221-318 to 1-14, which is below the image's own detail. Turn it off only if
+your image already tiles properly.
+
+**`bgZoom` makes the bamboo bigger.** At `1` the image is scaled so its full
+height fits the 640px canvas. At `2` it is drawn twice that size, centred, with
+the top and bottom cropping off — so the stalks read twice as large. Anything
+between works; use it to get the scale you want without re-cropping the file.
+
+A big source image is fine and will look sharper on high-DPI screens; it is
+scaled down to fit. Dark, low-contrast images work best, or the white shuriken
+and the blue ninja get lost against them.
 
 ## The pole
 

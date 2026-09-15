@@ -93,6 +93,9 @@ Sprite size (`drawH`) and spin speed (`spinFrames`) live in the `ASSETS` block j
   forgiving at the corners than a box-vs-box test and feels fairer than it looks.
 - **Rendering** scales for `devicePixelRatio` (capped at 2) and the canvas is letterboxed to fit the
   viewport without distorting the 400×640 play field.
+- **The background does not need to tile.** Alternate copies are mirrored, so each tile's edge meets
+  an identical copy of itself and the scrolling loop has no seam — which matters because photos
+  almost never tile. `bgZoom` scales it about the centre if you want the bamboo to read bigger.
 - **Assets never break the game.** Loading is fire-and-forget: a missing or broken file leaves its
   `ok` flag false and the draw call takes its procedural branch. A 2.5s timeout stops a stalled file
   from holding the loading screen open.

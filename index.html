@@ -49,9 +49,16 @@
   const ASSETS = {
 
     // ---- background -------------------------------------------------------
-    // Tiled horizontally and scrolled. Any height works; it is scaled to fit.
+    // Tiled horizontally and scrolled. Any size works.
     background: "assets/bg.png",
-    bgScroll:   0.35,            // parallax speed, relative to the obstacles
+    bgScroll:   0.35,   // parallax speed, relative to the obstacles
+    bgZoom:     1,      // 1 = fit the canvas height. Raise it to zoom in, so
+                        // the bamboo reads bigger; the image is centred and
+                        // the top and bottom crop off.
+    bgMirror:   true,   // Alternate tiles are flipped horizontally, so the
+                        // edges always meet themselves and the loop is
+                        // seamless even for a photo that doesn't tile.
+                        // Set false if your image already tiles cleanly.
 
     // ---- ground strip (optional) -----------------------------------------
     ground: "",                  // e.g. "assets/ground.png"
@@ -623,11 +630,27 @@
 
   function drawSky() {
     if (IMG.bg.ok) {
-      // scaled to cover the full height, tiled horizontally, wrapping
       const img = IMG.bg.img;
-      const w = Math.max(1, img.width * (H / img.height));
-      let x = -(bgOffset % w);
-      while (x < W) { ctx.drawImage(img, x, 0, w, H); x += w; }
+      const h = H * Math.max(0.01, ASSETS.bgZoom);
+      const w = Math.max(1, img.width * (h / img.height));
+      const oy = (H - h) / 2;              // zoomed in: keep the middle in frame
+
+      let i = Math.floor(bgOffset / w);    // which tile is leftmost
+      let x = -(bgOffset - i * w);
+      while (x < W) {
+        if (ASSETS.bgMirror && (i & 1)) {
+          // flip every other tile so its edge meets the previous tile's
+          // identical edge - no seam, whatever the source image is
+          ctx.save();
+          ctx.translate(x + w, oy);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, 0, 0, w, h);
+          ctx.restore();
+        } else {
+          ctx.drawImage(img, x, oy, w, h);
+        }
+        x += w; i++;
+      }
       return;
     }
 
