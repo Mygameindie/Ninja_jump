@@ -4,8 +4,8 @@ Drop your files in this folder using the names below and the game picks them up
 automatically. **Nothing here is required** — any file that is missing or fails
 to load falls back to the built-in canvas drawing, so the game always runs.
 
-All paths and sizes live in the `ASSETS` block at the top of the `<script>` in
-`index.html`. Change a filename there if you'd rather use your own names.
+All paths and sizes live in the `ASSETS` block at the top of `game.js`. Change a
+filename there if you'd rather use your own names.
 
 ## Files
 

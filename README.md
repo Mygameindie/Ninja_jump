@@ -2,9 +2,16 @@
 
 A Flappy Bird–style game: tap to jump, slip through the gaps between the poles, don't touch anything.
 
-Written as a single self-contained `index.html` — no build step, no dependencies. It ships with
-placeholder graphics drawn with the Canvas 2D API, and is set up so you can **drop in your own
-background, music and ninja sprites** without touching the game logic.
+No build step, no dependencies, no framework — three files and a folder of art:
+
+```
+index.html     markup and styling
+game.js        all the game logic
+assets/        art and audio
+```
+
+It ships with placeholder graphics drawn with the Canvas 2D API, and is set up so you can **drop in
+your own background, music and sprites** without touching the game logic.
 
 ## Adding your own art and music
 
@@ -30,8 +37,8 @@ Everything is optional. **Any file that's missing falls back to the built-in dra
 runs fine with an empty `assets/` folder and keeps running as you add art one piece at a time.
 Optional extras — a fall animation, ground art, obstacle art and sound effects — are wired up too.
 
-Paths, sprite sizes, frame rates and volumes all live in the `ASSETS` block at the top of the
-`<script>` in `index.html`. **See [`assets/README.md`](assets/README.md) for the full spec.**
+Paths, sprite sizes, frame rates and volumes all live in the `ASSETS` block at the top of
+`game.js`. **See [`assets/README.md`](assets/README.md) for the full spec.**
 
 ## Play
 
@@ -70,7 +77,8 @@ python3 -m http.server 8000
 
 ## Tuning
 
-All the feel-related numbers are constants at the top of the script, so they're easy to fiddle with:
+All the feel-related numbers are constants near the top of `game.js`, so they're easy to fiddle
+with:
 
 ```js
 const GRAVITY       = 0.42;
@@ -83,6 +91,10 @@ const MIN_GAP       = 136;   // hardest it ever gets
 ```
 
 Sprite size (`drawH`) and spin speed (`spinFrames`) live in the `ASSETS` block just above it.
+
+`game.js` is loaded as a **classic script, not an ES module** — deliberately, because modules are
+blocked by CORS on `file://` URLs and that would stop the game running when you just double-click
+`index.html`.
 
 ## Implementation notes
 
