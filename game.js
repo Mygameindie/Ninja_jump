@@ -20,7 +20,7 @@
 
     // ---- background -------------------------------------------------------
     // Tiled horizontally and scrolled. Any size works.
-    background: "assets/bg.png",
+    background: "assets/bg.jpg",
     bgScroll:   0.35,   // parallax speed, relative to the obstacles
     bgZoom:     1,      // 1 = fit the canvas height. Raise it to zoom in, so
                         // the bamboo reads bigger; the image is centred and
@@ -29,6 +29,15 @@
                         // edges always meet themselves and the loop is
                         // seamless even for a photo that doesn't tile.
                         // Set false if your image already tiles cleanly.
+    // Pushing a busy photo back so the poles and the ninja stay readable.
+    // Fade it toward a colour FURTHER from your foreground art, not just
+    // darker: the poles and ninja are dark, so a light haze separates them,
+    // while darkening the photo drags it down onto them and they vanish.
+    bgFade:      0.4,               // 0 = untouched, 1 = solid bgFadeColor
+    bgFadeColor: "228, 240, 248",   // pale haze. Use a dark colour only if
+                                    // your foreground art is light.
+    bgBlur:      2,                 // defocus in px, 0 = off. Cuts the photo's
+                                    // busyness without costing any contrast.
 
     // ---- ground strip (optional) -----------------------------------------
     ground: "",                  // e.g. "assets/ground.png"
@@ -598,29 +607,69 @@
     if (!loadedAll) drawLoading();
   }
 
+  // One tile of the background, flipped on odd indices so a photo that does
+  // not tile still loops without a seam.
+  function bgTile(c, img, i, x, y, w, h) {
+    if (ASSETS.bgMirror && (i & 1)) {
+      c.save();
+      c.translate(x + w, y);
+      c.scale(-1, 1);
+      c.drawImage(img, 0, 0, w, h);
+      c.restore();
+    } else {
+      c.drawImage(img, x, y, w, h);
+    }
+  }
+
+  let bgBuf = null;
+
+  function drawBackgroundPhoto() {
+    const img  = IMG.bg.img;
+    const h    = H * Math.max(0.01, ASSETS.bgZoom);
+    const w    = Math.max(1, img.width * (h / img.height));
+    const oy   = (H - h) / 2;                 // zoomed in: keep the middle in frame
+    const blur = Math.max(0, ASSETS.bgBlur || 0);
+
+    // A blur samples beyond whatever it draws, so blurring each tile on its own
+    // would give every tile a soft edge and put the seams straight back. Tile
+    // into an oversized buffer instead and blur once, with the buffer's own
+    // soft edges parked outside the canvas.
+    const pad = blur > 0 ? Math.ceil(blur * 3) : 0;
+    let target = ctx;
+    if (pad > 0) {
+      if (!bgBuf) bgBuf = document.createElement("canvas");
+      if (bgBuf.width !== W + pad * 2 || bgBuf.height !== H + pad * 2) {
+        bgBuf.width  = W + pad * 2;
+        bgBuf.height = H + pad * 2;
+      }
+      target = bgBuf.getContext("2d");
+      target.clearRect(0, 0, bgBuf.width, bgBuf.height);
+    }
+
+    let i = Math.floor(bgOffset / w);
+    let x = -(bgOffset - i * w);
+    while (x > -pad) { x -= w; i--; }          // cover the padded left edge too
+    while (x < W + pad) {
+      bgTile(target, img, i, x + pad, oy + pad, w, h);
+      x += w; i++;
+    }
+
+    if (pad > 0) {
+      ctx.save();
+      try { ctx.filter = "blur(" + blur + "px)"; } catch (e) { /* unsupported: draws sharp */ }
+      ctx.drawImage(bgBuf, -pad, -pad);
+      ctx.restore();
+    }
+
+    if (ASSETS.bgFade > 0) {
+      ctx.fillStyle = "rgba(" + ASSETS.bgFadeColor + ", " + Math.min(1, ASSETS.bgFade) + ")";
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
   function drawSky() {
     if (IMG.bg.ok) {
-      const img = IMG.bg.img;
-      const h = H * Math.max(0.01, ASSETS.bgZoom);
-      const w = Math.max(1, img.width * (h / img.height));
-      const oy = (H - h) / 2;              // zoomed in: keep the middle in frame
-
-      let i = Math.floor(bgOffset / w);    // which tile is leftmost
-      let x = -(bgOffset - i * w);
-      while (x < W) {
-        if (ASSETS.bgMirror && (i & 1)) {
-          // flip every other tile so its edge meets the previous tile's
-          // identical edge - no seam, whatever the source image is
-          ctx.save();
-          ctx.translate(x + w, oy);
-          ctx.scale(-1, 1);
-          ctx.drawImage(img, 0, 0, w, h);
-          ctx.restore();
-        } else {
-          ctx.drawImage(img, x, oy, w, h);
-        }
-        x += w; i++;
-      }
+      drawBackgroundPhoto();
       return;
     }
 
@@ -795,10 +844,12 @@
       return;
     }
 
-    ctx.fillStyle = "#4a3b52";
+    // earth tones: the old mauve was built for the drawn night sky and fights
+    // a green bamboo photo. Kept darker than the poles so they read against it.
+    ctx.fillStyle = "#2b1f16";
     ctx.fillRect(0, y, W, GROUND_H);
 
-    ctx.fillStyle = "#5b4864";
+    ctx.fillStyle = "#6b4a2a";      // lit rim, so the ground line stays crisp
     ctx.fillRect(0, y, W, 10);
 
     // scrolling roof-tile stripes

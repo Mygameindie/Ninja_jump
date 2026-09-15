@@ -25,7 +25,7 @@ assets/sfx_jump.mp3      jump sound             (in the repo)
 assets/sfx_hit.mp3       obstacle hit           (in the repo)
 assets/sfx_gameover.mp3  game over sting        (in the repo)
 assets/pole.png          obstacle pole          (in the repo)
-assets/bg.png            background, tiled + scrolled    <- still needed
+assets/bg.jpg            background, tiled + scrolled    (in the repo)
 assets/music.mp3         looping background music        <- still needed
 assets/sfx_score.mp3     point scored (optional)
 ```
@@ -108,6 +108,11 @@ blocked by CORS on `file://` URLs and that would stop the game running when you 
 - **The background does not need to tile.** Alternate copies are mirrored, so each tile's edge meets
   an identical copy of itself and the scrolling loop has no seam — which matters because photos
   almost never tile. `bgZoom` scales it about the centre if you want the bamboo to read bigger.
+- **The background fades pale, not dark.** Darkening a busy background is the instinct, but the poles
+  and ninja are darker than the bamboo photo, so dimming drags it onto them: measured, dimming to
+  0.45 cut the ninja's contrast against the background from 61 to 10. Fading toward pale lifts pole
+  contrast to 130 (from 86) and the ninja to 103 (from 60). `bgBlur` then cuts the photo's busyness,
+  applied once to an oversized offscreen buffer so it cannot resurrect the tile seams.
 - **Assets never break the game.** Loading is fire-and-forget: a missing or broken file leaves its
   `ok` flag false and the draw call takes its procedural branch. A 2.5s timeout stops a stalled file
   from holding the loading screen open.

@@ -11,7 +11,7 @@ filename there if you'd rather use your own names.
 
 | File | What it is | Notes |
 | --- | --- | --- |
-| `bg.png` | Background | **Still needed.** Tiled horizontally and scrolled. Any size. Edges do not need to match — see below. |
+| `bg.jpg` | Background | In the repo. Tiled horizontally and scrolled. Any size. Edges do not need to match — see below. |
 | `ninja_stand.png` | Standing pose | Shown on the start screen, planted on the ground. Already in the repo. |
 | `ninja_jump.png` | Jump pose | Used in the air and on death. Already in the repo. |
 | `ninja_fall.png` | Fall *(optional)* | If absent, the jump pose is reused. Enable by setting its `src` in `ASSETS`. |
@@ -28,8 +28,11 @@ filename there if you'd rather use your own names.
 Drop any image in as `bg.png`. Two knobs in `ASSETS` control it:
 
 ```js
-bgZoom:   1,      // 1 = fit the canvas height; raise it to zoom in
-bgMirror: true,   // flip alternate tiles so the loop has no seam
+bgZoom:      1,               // 1 = fit the canvas height; raise it to zoom in
+bgMirror:    true,            // flip alternate tiles so the loop has no seam
+bgFade:      0.4,             // blend toward bgFadeColor, 0-1
+bgFadeColor: "228, 240, 248", // pale haze
+bgBlur:      2,               // defocus in px
 ```
 
 **`bgMirror` means a photo does not need to tile.** Normally a scrolling
@@ -46,9 +49,27 @@ height fits the 640px canvas. At `2` it is drawn twice that size, centred, with
 the top and bottom cropping off — so the stalks read twice as large. Anything
 between works; use it to get the scale you want without re-cropping the file.
 
+**`bgFade` fades the photo toward a colour, and the direction matters more than
+the amount.** The instinct is to darken a busy background, but the poles and the
+ninja are *darker* than the bamboo photo, so darkening drags the background down
+onto them and they disappear into it. Measured on the shipped art, dimming to
+0.45 collapsed the ninja's separation from the background from 61 to 10.
+
+Fading toward a *pale* colour moves the background away from the dark
+foreground instead, and the same measurement rises: at `bgFade: 0.4` the pole
+separates by 130 (from 86) and the ninja by 103 (from 60). So pick a
+`bgFadeColor` far from your foreground art — pale for dark sprites, dark only if
+your sprites are light.
+
+**`bgBlur`** cuts the photo's busyness without costing any contrast, which
+matters here because the background bamboo runs vertically just like the poles.
+It is applied to the whole tiled background at once via an oversized offscreen
+buffer, not per tile — blurring each tile separately would soften its edges and
+put the seams straight back. Measured at 60fps with it on, same as off; set it
+to `0` if you ever need the frames back.
+
 A big source image is fine and will look sharper on high-DPI screens; it is
-scaled down to fit. Dark, low-contrast images work best, or the white shuriken
-and the blue ninja get lost against them.
+scaled down to fit.
 
 ## The pole
 
