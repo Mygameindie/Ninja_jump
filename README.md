@@ -1,6 +1,6 @@
 # Ninja Jump
 
-A Flappy Bird–style game: tap to flap, slip through the gaps in the bamboo, don't touch anything.
+A Flappy Bird–style game: tap to jump, slip through the gaps between the poles, don't touch anything.
 
 Written as a single self-contained `index.html` — no build step, no dependencies. It ships with
 placeholder graphics drawn with the Canvas 2D API, and is set up so you can **drop in your own
@@ -17,6 +17,7 @@ assets/ninja_jump.png    jump pose              (in the repo)
 assets/sfx_jump.mp3      jump sound             (in the repo)
 assets/sfx_hit.mp3       obstacle hit           (in the repo)
 assets/sfx_gameover.mp3  game over sting        (in the repo)
+assets/pole.png          obstacle pole          (in the repo)
 assets/bg.png            background, tiled + scrolled    <- still needed
 assets/music.mp3         looping background music        <- still needed
 assets/sfx_score.mp3     point scored (optional)
@@ -59,9 +60,9 @@ python3 -m http.server 8000
   The flip takes 30 frames (half a second); change `spinFrames` in `ASSETS` to
   spin faster or slower.
 - Gravity pulls you down constantly; each jump sets a fixed upward velocity.
-- You score a point for every bamboo gate you pass.
+- You score a point for every gate you pass.
 - The gap narrows by 5px every 5 points, down to a floor of 136px, so it gets harder but stays clearable.
-- Hitting bamboo or the ground ends the run: the ninja stops spinning and tumbles head-down to the
+- Hitting a pole or the ground ends the run: the ninja stops spinning and tumbles head-down to the
   ground, Flappy Bird style. The hit sound fires on impact and the game-over sting waits until he
   lands, so the two never talk over each other. Bumping the **ceiling** does not kill you — you just stop rising, so the
   top of the screen is a safe wall rather than an invisible death line.
@@ -95,6 +96,10 @@ Sprite size (`drawH`) and spin speed (`spinFrames`) live in the `ASSETS` block j
 - **Assets never break the game.** Loading is fire-and-forget: a missing or broken file leaves its
   `ok` flag false and the draw call takes its procedural branch. A 2.5s timeout stops a stalled file
   from holding the loading screen open.
+- **Obstacle decoration overhangs the hitbox.** The shuriken stick out past the pole, so the art is
+  drawn wider than the column via `obstacleOverhang` while the collision box stays the plain 52px
+  column. Tiles are laid from the gap end outwards, so the art's finished edge always faces the
+  opening and seams get pushed off-screen.
 - **The hitbox is independent of the art** — a fixed 17px radius circle regardless of `drawH`, so
   swapping sprites can't accidentally change the difficulty. It covers the torso rather than the
   whole sprite, which keeps a spinning humanoid forgiving instead of punishing.

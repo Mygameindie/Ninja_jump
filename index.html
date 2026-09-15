@@ -56,10 +56,16 @@
     // ---- ground strip (optional) -----------------------------------------
     ground: "",                  // e.g. "assets/ground.png"
 
-    // ---- obstacles (optional) --------------------------------------------
-    // body is tiled along the column, cap is drawn at the gap end.
-    obstacleBody: "",            // e.g. "assets/bamboo.png"
-    obstacleCap:  "",            // e.g. "assets/bamboo_cap.png"
+    // ---- obstacles --------------------------------------------------------
+    // body is tiled along the column from the gap end outwards; cap, if given,
+    // is drawn at the gap end (the pole art finishes itself, so none is used).
+    obstacleBody: "assets/pole.png",
+    obstacleCap:  "",
+
+    // How much wider the body image is than the column itself, so decoration
+    // that sticks out past the pole (the shuriken) can hang outside the
+    // collision box instead of being squashed into it. 1 = art is the column.
+    obstacleOverhang: 1.3029,
 
     // ---- audio ------------------------------------------------------------
     music:      "assets/music.mp3",
@@ -67,7 +73,7 @@
     sfxVol:     0.6,
     sfx: {
       jump:     "assets/sfx_jump.mp3",   // on every jump
-      hit:      "assets/sfx_hit.mp3",    // the moment you clip bamboo or ground
+      hit:      "assets/sfx_hit.mp3",    // the moment you clip a pole or the ground
       gameover: "assets/sfx_gameover.mp3", // once the ninja comes to rest
       score:    "assets/sfx_score.mp3",  // no file yet - synthesized blip stands in
     },
@@ -706,16 +712,24 @@
 
     if (IMG.body.ok) {
       const img = IMG.body.img;
-      const th = Math.max(1, img.height * (w / img.width));   // tile at natural aspect
+      // Scale so the COLUMN matches w; art wider than the column (shuriken
+      // stuck through the pole) then overhangs on both sides, as drawn.
+      const tw = w * ASSETS.obstacleOverhang;
+      const tx = x + w / 2 - tw / 2;
+      const th = Math.max(1, img.height * (tw / img.width));  // tile at natural aspect
+
       ctx.save();
+      // clip vertically only: the column must not bleed into the gap, but the
+      // overhang has to stay visible, so don't clip it to the column width
       ctx.beginPath();
-      ctx.rect(x, y, w, h);
+      ctx.rect(0, y, W, h);
       ctx.clip();
-      // tile from the gap end outwards so the seam never lands on the cap
+      // tile from the gap end outwards, so the finished end of the art always
+      // lands on the gap and any seam is pushed off-screen
       if (capOnTop) {
-        for (let ty = y; ty < y + h; ty += th) ctx.drawImage(img, x, ty, w, th);
+        for (let ty = y; ty < y + h; ty += th) ctx.drawImage(img, tx, ty, tw, th);
       } else {
-        for (let ty = y + h - th; ty > y - th; ty -= th) ctx.drawImage(img, x, ty, w, th);
+        for (let ty = y + h - th; ty > y - th; ty -= th) ctx.drawImage(img, tx, ty, tw, th);
       }
       ctx.restore();
 
@@ -937,7 +951,7 @@
       ctx.fillText("Tap, click or press Space to jump", W / 2, 170);
       ctx.fillStyle = "#8e98b2";
       ctx.font = "14px 'Trebuchet MS', sans-serif";
-      ctx.fillText("slip through the bamboo", W / 2, 192);
+      ctx.fillText("slip through the gaps", W / 2, 192);
       if (best > 0) {
         ctx.fillStyle = "#ffd36e";
         ctx.font = "bold 15px 'Trebuchet MS', sans-serif";

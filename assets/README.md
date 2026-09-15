@@ -17,11 +17,38 @@ All paths and sizes live in the `ASSETS` block at the top of the `<script>` in
 | `ninja_fall.png` | Fall *(optional)* | If absent, the jump pose is reused. Enable by setting its `src` in `ASSETS`. |
 | `music.mp3` | Background music | **Still needed.** Loops. Starts on your first tap (browsers block autoplay before a gesture). |
 | `sfx_jump.mp3` | Jump | In the repo. Plays on every jump. |
-| `sfx_hit.mp3` | Obstacle hit | In the repo. Fires the instant you clip bamboo or the ground. |
+| `sfx_hit.mp3` | Obstacle hit | In the repo. Fires the instant you clip a pole or the ground. |
 | `sfx_gameover.mp3` | Game over | In the repo. Fires once the ninja comes to rest, not on impact. |
 | `sfx_score.mp3` | Point scored *(optional)* | Not supplied — a synthesized blip stands in until you add one. |
 | `ground.png` | Ground strip *(optional)* | Tiled. 76px tall on screen. Set its `src` in `ASSETS` to enable. |
-| `bamboo.png` + `bamboo_cap.png` | Obstacle art *(optional)* | Body is tiled along the column, cap is drawn at the gap end. Set both in `ASSETS`. |
+| `pole.png` | Obstacle | In the repo. Tiled along each column from the gap end outwards. |
+
+## The pole
+
+`pole.png` is tiled along each column, starting at the **gap end** so the art's
+own finished edge always faces the opening and any seam is pushed off-screen.
+Columns are taller than one tile about half the time, and the repeat reads as a
+joint between two sections of timber.
+
+The shuriken stick out past the sides of the pole, so the image is wider than
+the column it fills:
+
+```js
+obstacleBody:     "assets/pole.png",
+obstacleOverhang: 1.3029,   // image width / pole width
+```
+
+`obstacleOverhang` is what keeps the **wood** aligned to the 52px collision box
+while the shuriken hang outside it. Get it wrong and the pole is either too fat
+or too thin for its own hitbox, so you die on thin air or clip through wood.
+To recompute it after redrawing: divide the image width by the width of the
+pole itself (ignoring anything sticking out), keeping the pole horizontally
+centred in the image. Set it to `1` if your art has no overhang.
+
+Decoration that overhangs is **cosmetic only** — the collision box is always
+the plain 52px column, so a shuriken can never kill you.
+
+A `cap` image is optional and unused here, since the pole draws its own ends.
 
 ## Sprite sheet format
 
@@ -78,7 +105,7 @@ ninja and does not change with it. That's deliberate: you can resize or restyle
 the art without altering the difficulty.
 
 The hitbox deliberately covers roughly the torso, not the full sprite, so hands
-and feet can clip past bamboo without killing you. For a humanoid that spins in
+and feet can clip past a pole without killing you. For a humanoid that spins in
 the air that reads as generous rather than broken — tightening it to the art
 would make the game punishing. If your sprite has a lot of empty padding and
 feels unfairly large, lower `drawH` rather than touching the hitbox.
