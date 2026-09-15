@@ -88,6 +88,12 @@ tight to its own outline.
 Transparent PNG is what you want. The ninja should **face right** — that's the
 direction of travel.
 
+**Export alpha as drawn and don't post-process it.** Stripping "white
+background" from an image by colour will also hollow out white *details* — the
+shuriken on the pole, the ninja's eyes and chest emblem are all white and sit
+inside the artwork. If a file genuinely has an opaque white background, remove
+it with a flood fill from the edges, which leaves enclosed white areas alone.
+
 ## Sizing and positioning
 
 ```js
