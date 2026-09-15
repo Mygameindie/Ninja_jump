@@ -66,10 +66,15 @@
     musicVol:   0.45,
     sfxVol:     0.6,
     sfx: {
-      jump:  "assets/sfx_jump.wav",
-      score: "assets/sfx_score.wav",
-      hit:   "assets/sfx_hit.wav",
+      jump:     "assets/sfx_jump.mp3",   // on every jump
+      hit:      "assets/sfx_hit.mp3",    // the moment you clip bamboo or ground
+      gameover: "assets/sfx_gameover.mp3", // once the ninja comes to rest
+      score:    "assets/sfx_score.mp3",  // no file yet - synthesized blip stands in
     },
+
+    // Frames to wait after the hit before the game-over sting, so the two
+    // never stack. The hit clip is ~0.44s, so half a second clears it.
+    gameOverDelay: 30,
 
     // ---- ninja sprites ----------------------------------------------------
     // Horizontal strips (all frames in one row) OR a grid — set rows/cols.
@@ -212,23 +217,38 @@
   }
 
   const FALLBACK_SFX = {
-    jump:  () => blip(520, 0.09, "square"),
-    score: () => blip(880, 0.12, "triangle"),
-    hit:   () => blip(150, 0.30, "sawtooth"),
+    jump:     () => blip(520, 0.09, "square"),
+    score:    () => blip(880, 0.12, "triangle"),
+    hit:      () => blip(150, 0.30, "sawtooth"),
+    gameover: () => blip(110, 0.55, "sawtooth"),
   };
+
+  // Sounds that should restart rather than pile up on themselves.
+  const NO_OVERLAP = { hit: true, gameover: true };
 
   function playSfx(name) {
     if (SND.muted) return;
     const a = SND.sfx[name];
-    if (a && a.readyState >= 2) {
+    // Only a load error nulls the slot, so don't gate on readyState here:
+    // a file that simply hasn't finished decoding yet would fall through to
+    // the blip and you'd hear the placeholder instead of the real sound.
+    if (a) {
       try {
-        const c = a.cloneNode();       // clone so rapid flaps overlap
-        c.volume = ASSETS.sfxVol;
-        c.play().catch(() => {});
+        const el = NO_OVERLAP[name] ? a : a.cloneNode();  // clone so rapid jumps overlap
+        el.volume = ASSETS.sfxVol;
+        try { el.currentTime = 0; } catch (e) { /* not seekable yet */ }
+        const pr = el.play();
+        if (pr && pr.catch) pr.catch(() => { if (FALLBACK_SFX[name]) FALLBACK_SFX[name](); });
         return;
       } catch (e) { /* fall through to the blip */ }
     }
     if (FALLBACK_SFX[name]) FALLBACK_SFX[name]();
+  }
+
+  function stopSfx(name) {
+    const a = SND.sfx[name];
+    if (!a) return;
+    try { a.pause(); a.currentTime = 0; } catch (e) { /* nothing playing */ }
   }
 
   function startMusic() {
@@ -239,6 +259,7 @@
   function setMuted(v) {
     SND.muted = v;
     save("ninjaJumpMuted", v ? "1" : "0");
+    if (v) { for (const k in SND.sfx) stopSfx(k); }
     if (SND.music) {
       if (v) { SND.music.pause(); }
       else { SND.music.play().then(() => { SND.started = true; }).catch(() => {}); }
@@ -266,7 +287,7 @@
 
   // ---------------------------------------------------------------- state
   let state, ninja, gates, particles, stars, clouds, score, best, frame;
-  let shake = 0, flash = 0, deadTimer = 0, groundOffset = 0, bgOffset = 0;
+  let shake = 0, flash = 0, deadTimer = 0, groundOffset = 0, bgOffset = 0, gameOverPlayed = false;
 
   best = Number(load("ninjaJumpBest") || 0);
 
@@ -283,6 +304,11 @@
   }
 
   function reset() {
+    // a retry mid-sting should cut it off, not talk over the new run
+    stopSfx("gameover");
+    stopSfx("hit");
+    gameOverPlayed = false;
+
     state = STATE.READY;
     ninja = { y: standY(), vy: 0, rot: 0, trail: [], anim: "stand", animT: 0, spinT: 0 };
     gates = [];
@@ -475,9 +501,11 @@
     if (state === STATE.DEAD) {
       deadTimer++;
       // fall to the ground, then stop
+      let atRest = true;
       if (ninja.y < H - GROUND_H - NINJA_R) {
         ninja.vy = Math.min(ninja.vy + GRAVITY, MAX_FALL);
         ninja.y += ninja.vy;
+        atRest = false;
       } else {
         ninja.y = H - GROUND_H - NINJA_R;
         ninja.vy = 0;
@@ -485,6 +513,12 @@
       // keep tumbling head-down even after landing, so a ninja that dies at
       // ground level still settles into the pose instead of freezing mid-flip
       ninja.rot += (DEAD_ROT - ninja.rot) * .12;
+
+      // sting lands on the thud, but never on top of the hit sound
+      if (!gameOverPlayed && atRest && deadTimer >= ASSETS.gameOverDelay) {
+        gameOverPlayed = true;
+        playSfx("gameover");
+      }
     }
 
     for (let i = particles.length - 1; i >= 0; i--) {

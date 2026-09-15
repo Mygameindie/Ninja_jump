@@ -15,10 +15,11 @@ All paths and sizes live in the `ASSETS` block at the top of the `<script>` in
 | `ninja_stand.png` | Standing pose | Shown on the start screen, planted on the ground. Already in the repo. |
 | `ninja_jump.png` | Jump pose | Used in the air and on death. Already in the repo. |
 | `ninja_fall.png` | Fall *(optional)* | If absent, the jump pose is reused. Enable by setting its `src` in `ASSETS`. |
-| `music.mp3` | Background music | Loops. Starts on your first tap (browsers block autoplay before a gesture). |
-| `sfx_jump.wav` | Jump sound | Optional — a synthesized blip is used if missing. |
-| `sfx_score.wav` | Point scored | Optional. |
-| `sfx_hit.wav` | Crash | Optional. |
+| `music.mp3` | Background music | **Still needed.** Loops. Starts on your first tap (browsers block autoplay before a gesture). |
+| `sfx_jump.mp3` | Jump | In the repo. Plays on every jump. |
+| `sfx_hit.mp3` | Obstacle hit | In the repo. Fires the instant you clip bamboo or the ground. |
+| `sfx_gameover.mp3` | Game over | In the repo. Fires once the ninja comes to rest, not on impact. |
+| `sfx_score.mp3` | Point scored *(optional)* | Not supplied — a synthesized blip stands in until you add one. |
 | `ground.png` | Ground strip *(optional)* | Tiled. 76px tall on screen. Set its `src` in `ASSETS` to enable. |
 | `bamboo.png` + `bamboo_cap.png` | Obstacle art *(optional)* | Body is tiled along the column, cap is drawn at the gap end. Set both in `ASSETS`. |
 
@@ -88,8 +89,24 @@ underneath (or correct it with `offsetY`).
 
 ## Audio notes
 
+### The two death sounds
+
+`sfx_hit.mp3` plays on impact and `sfx_gameover.mp3` plays when the ninja
+finishes tumbling and lands, so the sting lands on the thud rather than talking
+over the crash. `gameOverDelay` in `ASSETS` (30 frames, half a second) is the
+floor on the gap between them, which matters when you die at ground level and
+land instantly — without it the two clips would stack. If you swap in a longer
+hit sound, raise it to match.
+
+Retrying while the sting is still playing cuts it off rather than letting it run
+under the new game.
+
+### General
+
 - `music.mp3` cannot start until the player taps, clicks or presses a key —
   that's a browser autoplay rule, not a bug.
 - Volume is set by `musicVol` and `sfxVol` in `ASSETS` (0 to 1).
 - `M` mutes, or tap the speaker in the top-right. The setting is remembered.
 - MP3 and WAV are the safest formats; OGG is not supported everywhere.
+- Keep effects short. Anything longer than the action it marks will overlap the
+  next one — the shipped clips are 0.37s, 0.44s and 0.60s.

@@ -8,14 +8,18 @@ background, music and ninja sprites** without touching the game logic.
 
 ## Adding your own art and music
 
-The ninja sprites are already in `assets/`. Add the rest by dropping files in
-with these names — the game picks them up on reload:
+The ninja sprites and sound effects are already in `assets/`. Add the rest by
+dropping files in with these names — the game picks them up on reload:
 
 ```
-assets/ninja_stand.png   standing pose (in the repo)
-assets/ninja_jump.png    jump pose (in the repo)
-assets/bg.png            background (tiled + scrolled)
-assets/music.mp3         looping background music
+assets/ninja_stand.png   standing pose          (in the repo)
+assets/ninja_jump.png    jump pose              (in the repo)
+assets/sfx_jump.mp3      jump sound             (in the repo)
+assets/sfx_hit.mp3       obstacle hit           (in the repo)
+assets/sfx_gameover.mp3  game over sting        (in the repo)
+assets/bg.png            background, tiled + scrolled    <- still needed
+assets/music.mp3         looping background music        <- still needed
+assets/sfx_score.mp3     point scored (optional)
 ```
 
 Sprite strips are one row of equal square frames; the frame count is auto-detected, so a 6-frame
@@ -58,7 +62,8 @@ python3 -m http.server 8000
 - You score a point for every bamboo gate you pass.
 - The gap narrows by 5px every 5 points, down to a floor of 136px, so it gets harder but stays clearable.
 - Hitting bamboo or the ground ends the run: the ninja stops spinning and tumbles head-down to the
-  ground, Flappy Bird style. Bumping the **ceiling** does not kill you — you just stop rising, so the
+  ground, Flappy Bird style. The hit sound fires on impact and the game-over sting waits until he
+  lands, so the two never talk over each other. Bumping the **ceiling** does not kill you — you just stop rising, so the
   top of the screen is a safe wall rather than an invisible death line.
 - Your best score is kept in `localStorage`.
 
@@ -99,3 +104,7 @@ Sprite size (`drawH`) and spin speed (`spinFrames`) live in the `ASSETS` block j
   mid-flip lying sideways on the ground.
 - **Music starts on the first tap**, because browsers block autoplay before a user gesture. Missing
   sound effects fall back to short WebAudio blips.
+- **Sound playback doesn't wait on `readyState`.** Only a load error disables a clip, so one that
+  hasn't finished decoding still plays rather than being replaced by its placeholder blip. Jumps
+  play on cloned elements so rapid taps overlap; the hit and game-over stings restart instead, and
+  retrying cuts the sting off.
